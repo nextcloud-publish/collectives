@@ -15,6 +15,10 @@ return [
 		// Service worker route
 		['name' => 'start#serviceWorker', 'url' => '/service-worker.js', 'verb' => 'GET'],
 
+		// Page zip export
+		['name' => 'collectiveExport#download', 'url' => '/{collectiveId}/pages/{pageId}/export', 'verb' => 'GET',
+			'requirements' => ['collectiveId' => '\d+', 'pageId' => '\d+']],
+
 		// Vue.js router public route (Vue.js frontend)
 		['name' => 'publicStart#showAuthenticate', 'url' => '/p/{token}/authenticate/{redirect}', 'verb' => 'GET'],
 		['name' => 'publicStart#authenticate', 'url' => '/p/{token}/authenticate/{redirect}', 'verb' => 'POST'],
