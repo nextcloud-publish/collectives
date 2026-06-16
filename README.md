@@ -43,34 +43,19 @@ See [DEVELOPING.md](DEVELOPING.md) to set up a development environment and learn
 
 Install directly from the [Nextcloud App Store](https://apps.nextcloud.com/apps/collectives).
 
-## 📤 Static site export (Hugo)
+## 📤 Static site export (Hugo) — proof of concept
 
-A page and all of its subpages can be exported as a self-contained static HTML website.
-The pages are rendered with [Hugo](https://gohugo.io/) and downloaded as a `.zip` archive
-(open `index.html` from the extracted folder to browse the site offline).
+A minimal showcase: export a page (and subpages) to static HTML via [Hugo](https://gohugo.io/),
+downloaded as a `.zip` (open `index.html` offline). Intentionally simple — no attachments,
+no styled theme, just demonstrates the pipeline.
 
-This feature requires the **`hugo` binary** to be available to the Nextcloud server process
-(i.e. inside the container/host that runs PHP, not just your workstation).
-
-### Install Hugo
+Requires the **`hugo` binary** inside the Nextcloud container (not just on your host).
 
 ```bash
-# Debian/Ubuntu
-apt-get update && apt-get install -y hugo
-
-# or download a release binary from https://github.com/gohugoio/hugo/releases
+# nextcloud-docker-dev
+docker exec -u root master-nextcloud-1 sh -c 'apt-get update && apt-get install -y hugo'
+docker exec -u www-data master-nextcloud-1 php occ config:app:set collectives hugo_binary --value=/usr/bin/hugo
 ```
-
-### Configure the binary path (optional)
-
-If `hugo` is on the web server's `$PATH`, it is detected automatically. Otherwise, point the
-app at an absolute path:
-
-```bash
-occ config:app:set collectives hugo_binary --value=/usr/bin/hugo
-```
-
-If Hugo cannot be found, the export request fails with a descriptive error.
 
 ## 🔣 Translations
 

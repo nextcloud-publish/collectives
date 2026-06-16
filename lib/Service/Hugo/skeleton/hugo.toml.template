@@ -1,0 +1,8 @@
+baseURL = '/'
+title = {{TITLE}}
+cacheDir = {{CACHE_DIR}}
+relativeURLs = true
+disableKinds = ['taxonomy', 'term', 'rss', 'sitemap']
+
+[markup.goldmark.renderer]
+unsafe = true
