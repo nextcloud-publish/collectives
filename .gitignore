@@ -6,6 +6,7 @@ node_modules/
 
 # Editor directories and files
 .idea/
+.cursor/
 
 # Compiled frontend output of vite
 js/*
@@ -25,3 +26,8 @@ cypress/videos/
 # Playwright test artifacts
 /playwright-report/
 /test-results/
+
+# SSG (Astro) static site generator runtime & build artifacts
+/ssg/.runtime/
+/ssg/astro/dist/
+/ssg/astro/.astro/
