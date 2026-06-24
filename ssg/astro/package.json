@@ -1,0 +1,14 @@
+{
+  "name": "collectives-ssg",
+  "description": "Astro static site generator for the Collectives app",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "build": "astro build"
+  },
+  "dependencies": {
+    "astro": "^5.6.0"
+  }
+}

@@ -50,6 +50,15 @@ $(BUILD_TOOLS_DIR)/info.xsd:
 node-modules:
 	$(NPM) ci
 
+# Static site generator (Astro) runtime + dependencies
+# Provides a portable Node.js runtime and installs Astro so the PHP backend can
+# render static sites at runtime. The project dir must be writable by the web
+# server user for Astro's content-types step (creates ./ssg/astro/.astro).
+ssg-setup:
+	sh ssg/fetch-node.sh
+	cd ssg/astro && ../.runtime/node/bin/npm install --no-audit --no-fund
+	chmod o+w ssg/astro
+
 composer-install: composer
 	php $(BUILD_TOOLS_DIR)/composer.phar install --prefer-dist
 
