@@ -44,6 +44,10 @@
 			v-if="showCollectiveMembersModal"
 			:collective="membersCollective"
 			@close="onCloseCollectiveMembersModal" />
+		<StaticSiteModal
+			v-if="staticSiteCollective"
+			:collective="staticSiteCollective"
+			@close="onCloseStaticSiteModal" />
 		<TemplatesDialog v-if="templatesCollectiveId" />
 	</NcAppNavigation>
 </template>
@@ -56,6 +60,7 @@ import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCaption'
 import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
+import StaticSiteModal from './Collective/StaticSiteModal.vue'
 import CollectiveListItem from './Nav/CollectiveListItem.vue'
 import CollectiveMembersModal from './Nav/CollectiveMembersModal.vue'
 import CollectivesGlobalSettings from './Nav/CollectivesGlobalSettings.vue'
@@ -81,6 +86,7 @@ export default {
 		CollectivesTrash,
 		NewCollectiveModal,
 		SkeletonLoading,
+		StaticSiteModal,
 		PlusIcon,
 		TemplatesDialog,
 	},
@@ -101,6 +107,7 @@ export default {
 		...mapState(useCollectivesStore, [
 			'membersCollective',
 			'sortedCollectives',
+			'staticSiteCollective',
 			'templatesCollectiveId',
 		]),
 
@@ -129,6 +136,7 @@ export default {
 			'deleteCollective',
 			'restoreCollective',
 			'setMembersCollectiveId',
+			'setStaticSiteCollectiveId',
 		]),
 
 		/**
@@ -164,6 +172,10 @@ export default {
 
 		onCloseCollectiveMembersModal() {
 			this.setMembersCollectiveId(null)
+		},
+
+		onCloseStaticSiteModal() {
+			this.setStaticSiteCollectiveId(null)
 		},
 	},
 }

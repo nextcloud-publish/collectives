@@ -36,19 +36,21 @@ class StaticSiteController extends OCSController {
 	}
 
 	/**
-	 * Render a sample static site with Hugo and store it in the user's files.
+	 * Render the selected collective pages as a static site with Hugo and store it in the user's files.
 	 *
+	 * @param int $collectiveId ID of the collective
+	 * @param int[] $pageIds IDs of the pages to include
 	 * @param string|null $title Optional title shown on the generated site
 	 *
-	 * @return DataResponse<Http::STATUS_OK, array{path: string}, array{}>
+	 * @return DataResponse<Http::STATUS_OK, array{path: string, pages: int}, array{}>
 	 * @throws OCSException Build or storage failed
 	 *
 	 * 200: Static site generated and stored
 	 */
 	#[NoAdminRequired]
-	public function create(?string $title = null): DataResponse {
+	public function create(int $collectiveId, array $pageIds = [], ?string $title = null): DataResponse {
 		try {
-			return new DataResponse($this->service->generateSampleSite($this->getUid(), $title));
+			return new DataResponse($this->service->generateSite($this->getUid(), $collectiveId, $pageIds, $title));
 		} catch (MissingDependencyException $e) {
 			throw new OCSException($e->getMessage(), Http::STATUS_NOT_IMPLEMENTED, $e);
 		} catch (\Throwable $e) {

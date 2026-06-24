@@ -7,10 +7,12 @@ import axios from '@nextcloud/axios'
 import { apiUrl } from './urls.js'
 
 /**
- * Render a sample static site with Hugo and store it in the user's files.
+ * Render the selected collective pages as a static site with Hugo.
  *
+ * @param {number} collectiveId - ID of the collective
+ * @param {number[]} pageIds - IDs of the pages to include
  * @param {string} title - Title shown on the generated site
  */
-export function generateStaticSite(title) {
-	return axios.post(apiUrl('v1.0', 'staticsite'), { title })
+export function generateStaticSite(collectiveId, pageIds, title) {
+	return axios.post(apiUrl('v1.0', 'staticsite'), { collectiveId, pageIds, title })
 }

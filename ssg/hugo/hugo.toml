@@ -5,9 +5,16 @@ baseURL = "/"
 languageCode = "en-us"
 title = "Collectives"
 
-# Keep the output minimal: just the rendered homepage, no feeds/taxonomies.
+# Keep the output minimal: just the homepage and the selected pages.
 disableKinds = ["taxonomy", "term", "RSS", "sitemap", "404", "robotsTXT"]
+
+# Emit links relative to each page, so the site works from any folder.
+relativeURLs = true
 
 # Allow templates to read COLLECTIVES_SSG_* environment variables via os.Getenv.
 [security.funcs]
 getenv = ["^COLLECTIVES_SSG_"]
+
+# Render raw HTML embedded in the collective's Markdown (trusted content).
+[markup.goldmark.renderer]
+unsafe = true

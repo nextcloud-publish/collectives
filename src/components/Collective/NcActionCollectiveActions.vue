@@ -47,11 +47,11 @@
 		</NcActionLink>
 		<NcActionButton
 			v-if="collective.canEdit"
-			:disabled="!networkOnline || generatingStaticSite"
-			@click="onGenerateStaticSite">
+			closeAfterClick
+			:disabled="!networkOnline"
+			@click="openStaticSite()">
 			<template #icon>
-				<NcLoadingIcon v-if="generatingStaticSite" :size="20" />
-				<WebIcon v-else :size="20" />
+				<WebIcon :size="20" />
 			</template>
 			{{ t('collectives', 'Generate static site') }}
 		</NcActionButton>
@@ -89,14 +89,13 @@
 </template>
 
 <script>
-import { showError, showSuccess, showUndo } from '@nextcloud/dialogs'
+import { showError, showUndo } from '@nextcloud/dialogs'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { mapActions, mapState } from 'pinia'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
-import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AccountMultipleIcon from 'vue-material-design-icons/AccountMultipleOutline.vue'
 import CogIcon from 'vue-material-design-icons/CogOutline.vue'
 import LogoutIcon from 'vue-material-design-icons/Logout.vue'
@@ -105,7 +104,6 @@ import ShareVariantIcon from 'vue-material-design-icons/ShareVariantOutline.vue'
 import DownloadIcon from 'vue-material-design-icons/TrayArrowDown.vue'
 import WebIcon from 'vue-material-design-icons/Web.vue'
 import PageTemplateIcon from '../Icon/PageTemplateIcon.vue'
-import { generateStaticSite } from '../../apis/collectives/index.js'
 import { useCirclesStore } from '../../stores/circles.js'
 import { useCollectivesStore } from '../../stores/collectives.js'
 import { usePagesStore } from '../../stores/pages.js'
@@ -122,7 +120,6 @@ export default {
 		NcActionButton,
 		NcActionLink,
 		NcActionSeparator,
-		NcLoadingIcon,
 		OpenInNewIcon,
 		PageTemplateIcon,
 		ShareVariantIcon,
@@ -144,7 +141,6 @@ export default {
 	data() {
 		return {
 			leaveTimeout: null,
-			generatingStaticSite: false,
 		}
 	},
 
@@ -193,6 +189,7 @@ export default {
 			'markCollectiveDeleted',
 			'setMembersCollectiveId',
 			'setSettingsCollectiveId',
+			'setStaticSiteCollectiveId',
 			'setTemplatesCollectiveId',
 			'unmarkCollectiveDeleted',
 		]),
@@ -215,22 +212,8 @@ export default {
 			this.setSettingsCollectiveId(this.collective.id)
 		},
 
-		async onGenerateStaticSite() {
-			this.generatingStaticSite = true
-			try {
-				const response = await generateStaticSite(this.collective.name)
-				const path = response.data.ocs.data.path
-				showSuccess(t('collectives', 'Static site generated and saved to {path}', { path }))
-			} catch (e) {
-				console.error('Failed to generate static site', e)
-				let errorMessage = ''
-				if (e.response?.data?.ocs?.meta?.message) {
-					errorMessage = e.response.data.ocs.meta.message
-				}
-				showError(t('collectives', 'Could not generate static site. {errorMessage}', { errorMessage }))
-			} finally {
-				this.generatingStaticSite = false
-			}
+		openStaticSite() {
+			this.setStaticSiteCollectiveId(this.collective.id)
 		},
 
 		leaveCollectiveWithUndo(collective) {
