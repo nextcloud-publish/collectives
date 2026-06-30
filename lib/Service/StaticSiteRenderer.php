@@ -114,6 +114,12 @@ class StaticSiteRenderer {
 			.page .content :first-child { margin-top: 0; }
 			.page img { max-width: 100%; }
 			.page pre { background: #f0f1f3; padding: 1rem; border-radius: 8px; overflow: auto; }
+			.page table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+			.page th, .page td { border: 1px solid #d0d3d8; padding: .5rem .75rem; vertical-align: top; }
+			.page th { background: #f0f1f3; font-weight: 600; }
+			.page tr:nth-child(even) td { background: #fafbfc; }
+			.page table p:first-child { margin-top: 0; }
+			.page table p:last-child { margin-bottom: 0; }
 			footer {
 				text-align: center;
 				padding: 2rem 1.5rem;
@@ -125,6 +131,9 @@ class StaticSiteRenderer {
 				.card, .page { background: #242424; box-shadow: none; }
 				.card p { color: #aaa; }
 				.page pre { background: #1a1a1a; }
+				.page th { background: #1a1a1a; }
+				.page th, .page td { border-color: #3a3a3a; }
+				.page tr:nth-child(even) td { background: #1e1e1e; }
 			}
 		</style>
 	</head>
