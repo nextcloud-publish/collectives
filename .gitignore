@@ -6,6 +6,7 @@ node_modules/
 
 # Editor directories and files
 .idea/
+.cursor/
 
 # Compiled frontend output of vite
 js/*
@@ -25,3 +26,6 @@ cypress/videos/
 # Playwright test artifacts
 /playwright-report/
 /test-results/
+
+# SSG (static site export) build artifacts
+/ssg/.runtime/

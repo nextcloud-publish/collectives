@@ -46,6 +46,16 @@
 			</template>
 		</NcActionLink>
 		<NcActionButton
+			v-if="collective.canEdit"
+			closeAfterClick
+			:disabled="!networkOnline"
+			@click="openStaticSite()">
+			<template #icon>
+				<WebIcon :size="20" />
+			</template>
+			{{ t('collectives', 'Generate static site') }}
+		</NcActionButton>
+		<NcActionButton
 			v-if="isCollectiveAdmin(collective)"
 			closeAfterClick
 			:disabled="!networkOnline"
@@ -92,6 +102,7 @@ import LogoutIcon from 'vue-material-design-icons/Logout.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariantOutline.vue'
 import DownloadIcon from 'vue-material-design-icons/TrayArrowDown.vue'
+import WebIcon from 'vue-material-design-icons/Web.vue'
 import PageTemplateIcon from '../Icon/PageTemplateIcon.vue'
 import { useCirclesStore } from '../../stores/circles.js'
 import { useCollectivesStore } from '../../stores/collectives.js'
@@ -112,6 +123,7 @@ export default {
 		OpenInNewIcon,
 		PageTemplateIcon,
 		ShareVariantIcon,
+		WebIcon,
 	},
 
 	props: {
@@ -177,6 +189,7 @@ export default {
 			'markCollectiveDeleted',
 			'setMembersCollectiveId',
 			'setSettingsCollectiveId',
+			'setStaticSiteCollectiveId',
 			'setTemplatesCollectiveId',
 			'unmarkCollectiveDeleted',
 		]),
@@ -197,6 +210,10 @@ export default {
 
 		openCollectiveSettings() {
 			this.setSettingsCollectiveId(this.collective.id)
+		},
+
+		openStaticSite() {
+			this.setStaticSiteCollectiveId(this.collective.id)
 		},
 
 		leaveCollectiveWithUndo(collective) {
