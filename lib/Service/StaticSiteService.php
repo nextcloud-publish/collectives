@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\Collectives\Service;
 
 use OCA\Collectives\Fs\MarkdownHelper;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 
@@ -18,8 +19,9 @@ use OCP\Files\IRootFolder;
  *
  * Flow:
  *   1. read the selected pages' Markdown and convert to HTML (league/commonmark)
- *   2. write index.html and per-page HTML into a temp directory
- *   3. store the generated site (a folder of HTML) in the user's Nextcloud files
+ *   2. copy `.attachments.*` folders for the selected pages into the site bundle
+ *   3. write index.html and per-page HTML into a temp directory
+ *   4. store the generated site (a folder of HTML) in the user's Nextcloud files
  */
 class StaticSiteService {
 	/** Folder (in the user's files) where generated sites are stored. */
@@ -48,12 +50,25 @@ class StaticSiteService {
 		$outDir = $workBase . '/out';
 
 		try {
-			$pages = $this->loadPages($collectiveId, $pageIds, $userId);
-			if ($pages === []) {
+			$markdownPages = $this->loadMarkdownPages($collectiveId, $pageIds, $userId);
+			if ($markdownPages === []) {
 				throw new ServiceException('None of the selected pages could be read');
 			}
 
 			@mkdir($outDir, 0o700, true);
+
+			$copiedAttachments = [];
+			foreach ($pageIds as $pageId) {
+				$this->copyAttachmentFolder($collectiveId, (int)$pageId, $userId, $outDir, $copiedAttachments);
+			}
+			foreach ($markdownPages as $page) {
+				foreach ($this->collectReferencedAttachmentPageIds($page['markdown']) as $ownerPageId) {
+					$this->copyAttachmentFolder($collectiveId, $ownerPageId, $userId, $outDir, $copiedAttachments);
+				}
+			}
+
+			$pages = $this->renderPages($markdownPages);
+
 			$this->renderer->renderIndex($outDir, $pages, $title, $userId);
 			foreach ($pages as $page) {
 				$this->renderer->renderPage($outDir, $page, $title, $userId);
@@ -68,13 +83,11 @@ class StaticSiteService {
 	}
 
 	/**
-	 * Load and render the selected pages.
-	 *
 	 * @param int[] $pageIds
 	 *
-	 * @return list<array{id: int, title: string, html: string, summary: string}>
+	 * @return list<array{id: int, title: string, markdown: string}>
 	 */
-	private function loadPages(int $collectiveId, array $pageIds, string $userId): array {
+	private function loadMarkdownPages(int $collectiveId, array $pageIds, string $userId): array {
 		$pages = [];
 		foreach ($pageIds as $pageId) {
 			$pageId = (int)$pageId;
@@ -94,16 +107,107 @@ class StaticSiteService {
 				$displayTitle = $pageInfo->getEmoji() . ' ' . $displayTitle;
 			}
 
-			$html = MarkdownHelper::toHtml($markdown);
 			$pages[] = [
 				'id' => $pageId,
 				'title' => $displayTitle,
+				'markdown' => $markdown,
+			];
+		}
+
+		return $pages;
+	}
+
+	/**
+	 * @param list<array{id: int, title: string, markdown: string}> $markdownPages
+	 *
+	 * @return list<array{id: int, title: string, html: string, summary: string}>
+	 */
+	private function renderPages(array $markdownPages): array {
+		$pages = [];
+		foreach ($markdownPages as $page) {
+			$html = MarkdownHelper::toHtml($page['markdown']);
+			$html = $this->rewriteAttachmentUrls($html);
+
+			$pages[] = [
+				'id' => $page['id'],
+				'title' => $page['title'],
 				'html' => $html,
 				'summary' => $this->makeSummary($html),
 			];
 		}
 
 		return $pages;
+	}
+
+	/**
+	 * @param array<string, true> $copied
+	 */
+	private function copyAttachmentFolder(
+		int $collectiveId,
+		int $pageId,
+		string $userId,
+		string $outDir,
+		array &$copied,
+	): void {
+		$folderName = '.attachments.' . $pageId;
+		if (isset($copied[$folderName])) {
+			return;
+		}
+
+		try {
+			$pageFile = $this->pageService->getPageFile($collectiveId, $pageId, $userId);
+			$parent = $pageFile->getParent();
+			if (!$parent->nodeExists($folderName)) {
+				return;
+			}
+			$folder = $parent->get($folderName);
+			if (!$folder instanceof Folder) {
+				return;
+			}
+
+			$this->copyFolderToDisk($folder, $outDir . '/' . $folderName);
+			$copied[$folderName] = true;
+		} catch (\Throwable) {
+			// Skip attachment folders we cannot read.
+		}
+	}
+
+	private function copyFolderToDisk(Folder $folder, string $localPath): void {
+		@mkdir($localPath, 0o700, true);
+		foreach ($folder->getDirectoryListing() as $node) {
+			if ($node instanceof File) {
+				$content = $node->getContent();
+				if (is_string($content)) {
+					file_put_contents($localPath . '/' . $node->getName(), $content);
+				}
+				continue;
+			}
+			if ($node instanceof Folder) {
+				$this->copyFolderToDisk($node, $localPath . '/' . $node->getName());
+			}
+		}
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function collectReferencedAttachmentPageIds(string $markdown): array {
+		if (!preg_match_all('#\.attachments\.(\d+)/#', $markdown, $matches)) {
+			return [];
+		}
+
+		return array_map(intval(...), array_unique($matches[1]));
+	}
+
+	/**
+	 * Pages live in page-<id>/index.html; attachment folders sit at the site root.
+	 */
+	private function rewriteAttachmentUrls(string $html): string {
+		return preg_replace(
+			'#(?<!\.\./)(?:\./)?\.attachments\.(\d+/)#',
+			'../.attachments.$1',
+			$html,
+		) ?? $html;
 	}
 
 	private function makeSummary(string $html): string {
