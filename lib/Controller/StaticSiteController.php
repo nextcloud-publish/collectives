@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\Collectives\Controller;
 
-use OCA\Collectives\Service\MissingDependencyException;
 use OCA\Collectives\Service\StaticSiteService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -20,7 +19,7 @@ use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 /**
- * Renders static sites from collectives via the Hugo SSG.
+ * Renders static sites from collectives via PHP CommonMark.
  */
 class StaticSiteController extends OCSController {
 	use UserTrait;
@@ -36,7 +35,7 @@ class StaticSiteController extends OCSController {
 	}
 
 	/**
-	 * Render the selected collective pages as a static site with Hugo and store it in the user's files.
+	 * Render the selected collective pages as a static site and store it in the user's files.
 	 *
 	 * @param int $collectiveId ID of the collective
 	 * @param int[] $pageIds IDs of the pages to include
@@ -51,8 +50,6 @@ class StaticSiteController extends OCSController {
 	public function create(int $collectiveId, array $pageIds = [], ?string $title = null): DataResponse {
 		try {
 			return new DataResponse($this->service->generateSite($this->getUid(), $collectiveId, $pageIds, $title));
-		} catch (MissingDependencyException $e) {
-			throw new OCSException($e->getMessage(), Http::STATUS_NOT_IMPLEMENTED, $e);
 		} catch (\Throwable $e) {
 			$this->logger->error('Failed to generate static site', ['exception' => $e]);
 			throw new OCSException($e->getMessage(), Http::STATUS_INTERNAL_SERVER_ERROR, $e);

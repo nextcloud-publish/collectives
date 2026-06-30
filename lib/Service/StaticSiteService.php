@@ -9,28 +9,26 @@ declare(strict_types=1);
 
 namespace OCA\Collectives\Service;
 
+use OCA\Collectives\Fs\MarkdownHelper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 
 /**
- * Renders a static site from selected collective pages using the Hugo SSG.
+ * Renders a static site from selected collective pages using PHP CommonMark.
  *
  * Flow:
- *   1. write the selected pages' Markdown into a temp copy of the Hugo project
- *   2. run the Hugo binary (a syscall) to render Markdown -> HTML
+ *   1. read the selected pages' Markdown and convert to HTML (league/commonmark)
+ *   2. write index.html and per-page HTML into a temp directory
  *   3. store the generated site (a folder of HTML) in the user's Nextcloud files
  */
 class StaticSiteService {
-	/** Portable Hugo binary, relative to the app root (see ssg/fetch-hugo.sh). */
-	private const HUGO_BINARY = 'ssg/.runtime/hugo';
-	/** The Hugo project directory, relative to the app root. */
-	private const HUGO_DIR = 'ssg/hugo';
 	/** Folder (in the user's files) where generated sites are stored. */
 	private const OUTPUT_BASE_DIR = 'Collectives Static Sites';
 
 	public function __construct(
 		private IRootFolder $rootFolder,
 		private PageService $pageService,
+		private StaticSiteRenderer $renderer,
 	) {
 	}
 
@@ -41,50 +39,43 @@ class StaticSiteService {
 	 *
 	 * @return array{path: string, pages: int} Path of the output folder and number of rendered pages
 	 *
-	 * @throws MissingDependencyException
 	 * @throws ServiceException
 	 */
 	public function generateSite(string $userId, int $collectiveId, array $pageIds, ?string $title = null): array {
-		$appRoot = dirname(__DIR__, 2);
-		$hugo = $appRoot . '/' . self::HUGO_BINARY;
-		if (!is_executable($hugo)) {
-			throw new MissingDependencyException('Hugo binary not found. Run `make ssg-setup` to install it.');
-		}
-
 		$title = ($title !== null && trim($title) !== '') ? trim($title) : 'Collectives';
 
 		$workBase = sys_get_temp_dir() . '/collectives-ssg-' . bin2hex(random_bytes(6));
-		$siteDir = $workBase . '/site';
 		$outDir = $workBase . '/out';
 
 		try {
-			// Build from a private copy so the app directory stays read-only.
-			$this->copyLocalTree($appRoot . '/' . self::HUGO_DIR, $siteDir);
-			$rendered = $this->writePages($siteDir . '/content', $collectiveId, $pageIds, $userId);
-			if ($rendered === 0) {
+			$pages = $this->loadPages($collectiveId, $pageIds, $userId);
+			if ($pages === []) {
 				throw new ServiceException('None of the selected pages could be read');
 			}
 
-			$this->runHugo($hugo, $siteDir, $outDir, $userId, $title);
+			@mkdir($outDir, 0o700, true);
+			$this->renderer->renderIndex($outDir, $pages, $title, $userId);
+			foreach ($pages as $page) {
+				$this->renderer->renderPage($outDir, $page, $title, $userId);
+			}
+
 			$path = $this->storeOutput($userId, $outDir, $title);
 
-			return ['path' => $path, 'pages' => $rendered];
+			return ['path' => $path, 'pages' => count($pages)];
 		} finally {
 			$this->removeDir($workBase);
 		}
 	}
 
 	/**
-	 * Write the selected pages as Hugo Markdown content files.
+	 * Load and render the selected pages.
 	 *
 	 * @param int[] $pageIds
 	 *
-	 * @return int Number of pages successfully written
+	 * @return list<array{id: int, title: string, html: string, summary: string}>
 	 */
-	private function writePages(string $contentDir, int $collectiveId, array $pageIds, string $userId): int {
-		@mkdir($contentDir, 0o700, true);
-
-		$weight = 0;
+	private function loadPages(int $collectiveId, array $pageIds, string $userId): array {
+		$pages = [];
 		foreach ($pageIds as $pageId) {
 			$pageId = (int)$pageId;
 			try {
@@ -98,51 +89,33 @@ class StaticSiteService {
 				continue;
 			}
 
-			$weight++;
 			$displayTitle = $pageInfo->getTitle() ?: 'Untitled';
 			if ($pageInfo->getEmoji()) {
 				$displayTitle = $pageInfo->getEmoji() . ' ' . $displayTitle;
 			}
 
-			$frontMatter = "---\n"
-				. 'title: ' . $this->yamlString($displayTitle) . "\n"
-				. 'weight: ' . $weight . "\n"
-				. "---\n\n";
-			file_put_contents($contentDir . '/page-' . $pageId . '.md', $frontMatter . $markdown);
+			$html = MarkdownHelper::toHtml($markdown);
+			$pages[] = [
+				'id' => $pageId,
+				'title' => $displayTitle,
+				'html' => $html,
+				'summary' => $this->makeSummary($html),
+			];
 		}
 
-		return $weight;
+		return $pages;
 	}
 
-	/**
-	 * Run the Hugo binary to build the site into $outDir.
-	 *
-	 * @throws ServiceException on a failed build
-	 */
-	private function runHugo(string $hugo, string $sourceDir, string $outDir, string $userId, string $title): void {
-		$command = [$hugo, '--source', $sourceDir, '--destination', $outDir, '--noBuildLock', '--quiet'];
-		$env = [
-			'PATH' => '/usr/bin:/bin',
-			'HOME' => sys_get_temp_dir(),
-			// Injected into the Hugo templates (read there via os.Getenv).
-			'COLLECTIVES_SSG_TITLE' => $title,
-			'COLLECTIVES_SSG_USER' => $userId,
-		];
-
-		$descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-		$process = proc_open($command, $descriptors, $pipes, $sourceDir, $env);
-		if (!is_resource($process)) {
-			throw new ServiceException('Could not start the Hugo process');
+	private function makeSummary(string $html): string {
+		$text = trim(preg_replace('/\s+/u', ' ', strip_tags($html)) ?? '');
+		if ($text === '') {
+			return '';
+		}
+		if (mb_strlen($text) <= 160) {
+			return $text;
 		}
 
-		stream_get_contents($pipes[1]);
-		$error = stream_get_contents($pipes[2]);
-		fclose($pipes[1]);
-		fclose($pipes[2]);
-
-		if (proc_close($process) !== 0) {
-			throw new ServiceException('Hugo build failed: ' . trim($error));
-		}
+		return mb_substr($text, 0, 157) . '…';
 	}
 
 	/**
@@ -154,7 +127,7 @@ class StaticSiteService {
 	 */
 	private function storeOutput(string $userId, string $localOutDir, string $title): string {
 		if (!is_dir($localOutDir) || !is_file($localOutDir . '/index.html')) {
-			throw new ServiceException('Hugo did not produce any output');
+			throw new ServiceException('Static site generation did not produce any output');
 		}
 
 		try {
@@ -193,24 +166,6 @@ class StaticSiteService {
 				$target->newFile($item, $content);
 			}
 		}
-	}
-
-	private function copyLocalTree(string $source, string $destination): void {
-		@mkdir($destination, 0o700, true);
-		foreach (scandir($source) ?: [] as $item) {
-			if ($item === '.' || $item === '..') {
-				continue;
-			}
-			$sourcePath = $source . '/' . $item;
-			$destinationPath = $destination . '/' . $item;
-			is_dir($sourcePath)
-				? $this->copyLocalTree($sourcePath, $destinationPath)
-				: copy($sourcePath, $destinationPath);
-		}
-	}
-
-	private function yamlString(string $value): string {
-		return '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
 	}
 
 	private function safeName(string $name): string {

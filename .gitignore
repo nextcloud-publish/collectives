@@ -27,8 +27,5 @@ cypress/videos/
 /playwright-report/
 /test-results/
 
-# SSG (Hugo) static site generator runtime & build artifacts
+# SSG (static site export) build artifacts
 /ssg/.runtime/
-/ssg/hugo/public/
-/ssg/hugo/resources/
-/ssg/hugo/.hugo_build.lock

@@ -7,7 +7,7 @@ import axios from '@nextcloud/axios'
 import { apiUrl } from './urls.js'
 
 /**
- * Render the selected collective pages as a static site with Hugo.
+ * Render the selected collective pages as a static HTML site.
  *
  * @param {number} collectiveId - ID of the collective
  * @param {number[]} pageIds - IDs of the pages to include
