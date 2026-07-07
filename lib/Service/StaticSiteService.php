@@ -9,19 +9,22 @@ declare(strict_types=1);
 
 namespace OCA\Collectives\Service;
 
-use OCA\Collectives\Fs\MarkdownHelper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use ZipArchive;
 
 /**
- * Renders a static site from selected collective pages using PHP CommonMark.
+ * Orchestrates static site generation.
  *
- * Flow:
- *   1. read the selected pages' Markdown and convert to HTML (league/commonmark)
- *   2. copy `.attachments.*` folders for the selected pages into the site bundle
- *   3. write index.html and per-page HTML into a temp directory
- *   4. store the generated site (a folder of HTML) in the user's Nextcloud files
+ * The heavy rendering (Markdown -> HTML, layout, zipping) runs in a separate,
+ * horizontally scalable renderer service (see ssg/). This service only:
+ *   1. gathers the selected pages' Markdown and their attachments,
+ *   2. ships them to the renderer via {@see StaticSiteRendererClient},
+ *   3. extracts the returned ZIP into the user's Nextcloud files.
+ *
+ * It is invoked from a background job so no rendering happens in the request
+ * worker.
  */
 class StaticSiteService {
 	/** Folder (in the user's files) where generated sites are stored. */
@@ -30,8 +33,12 @@ class StaticSiteService {
 	public function __construct(
 		private IRootFolder $rootFolder,
 		private PageService $pageService,
-		private StaticSiteRenderer $renderer,
+		private StaticSiteRendererClient $rendererClient,
 	) {
+	}
+
+	public function isConfigured(): bool {
+		return $this->rendererClient->isConfigured();
 	}
 
 	/**
@@ -46,40 +53,44 @@ class StaticSiteService {
 	public function generateSite(string $userId, int $collectiveId, array $pageIds, ?string $title = null): array {
 		$title = ($title !== null && trim($title) !== '') ? trim($title) : 'Collectives';
 
-		$workBase = sys_get_temp_dir() . '/collectives-ssg-' . bin2hex(random_bytes(6));
-		$outDir = $workBase . '/out';
-
-		try {
-			$markdownPages = $this->loadMarkdownPages($collectiveId, $pageIds, $userId);
-			if ($markdownPages === []) {
-				throw new ServiceException('None of the selected pages could be read');
-			}
-
-			@mkdir($outDir, 0o700, true);
-
-			$copiedAttachments = [];
-			foreach ($pageIds as $pageId) {
-				$this->copyAttachmentFolder($collectiveId, (int)$pageId, $userId, $outDir, $copiedAttachments);
-			}
-			foreach ($markdownPages as $page) {
-				foreach ($this->collectReferencedAttachmentPageIds($page['markdown']) as $ownerPageId) {
-					$this->copyAttachmentFolder($collectiveId, $ownerPageId, $userId, $outDir, $copiedAttachments);
-				}
-			}
-
-			$pages = $this->renderPages($markdownPages);
-
-			$this->renderer->renderIndex($outDir, $pages, $title, $userId);
-			foreach ($pages as $page) {
-				$this->renderer->renderPage($outDir, $page, $title, $userId);
-			}
-
-			$path = $this->storeOutput($userId, $outDir, $title);
-
-			return ['path' => $path, 'pages' => count($pages)];
-		} finally {
-			$this->removeDir($workBase);
+		$payload = $this->buildPayload($userId, $collectiveId, $pageIds, $title);
+		if ($payload['pages'] === []) {
+			throw new ServiceException('None of the selected pages could be read');
 		}
+
+		$result = $this->rendererClient->render($payload);
+		$path = $this->storeZip($userId, $result['zip'], $title);
+
+		return ['path' => $path, 'pages' => $result['pages']];
+	}
+
+	/**
+	 * @param int[] $pageIds
+	 *
+	 * @return array{title: string, user: string, pages: list<array{id: int, title: string, markdown: string}>, attachments: list<array{path: string, content: string}>}
+	 */
+	private function buildPayload(string $userId, int $collectiveId, array $pageIds, string $title): array {
+		$pages = $this->loadMarkdownPages($collectiveId, $pageIds, $userId);
+
+		/** @var array<string, true> $collected */
+		$collected = [];
+		/** @var list<array{path: string, content: string}> $attachments */
+		$attachments = [];
+		foreach ($pageIds as $pageId) {
+			$this->collectAttachmentFolder($collectiveId, (int)$pageId, $userId, $attachments, $collected);
+		}
+		foreach ($pages as $page) {
+			foreach ($this->collectReferencedAttachmentPageIds($page['markdown']) as $ownerPageId) {
+				$this->collectAttachmentFolder($collectiveId, $ownerPageId, $userId, $attachments, $collected);
+			}
+		}
+
+		return [
+			'title' => $title,
+			'user' => $userId,
+			'pages' => $pages,
+			'attachments' => $attachments,
+		];
 	}
 
 	/**
@@ -118,39 +129,20 @@ class StaticSiteService {
 	}
 
 	/**
-	 * @param list<array{id: int, title: string, markdown: string}> $markdownPages
+	 * Collect the files of a page's `.attachments.<id>` folder as base64 payload entries.
 	 *
-	 * @return list<array{id: int, title: string, html: string, summary: string}>
+	 * @param list<array{path: string, content: string}> $attachments
+	 * @param array<string, true> $collected
 	 */
-	private function renderPages(array $markdownPages): array {
-		$pages = [];
-		foreach ($markdownPages as $page) {
-			$html = MarkdownHelper::toHtml($page['markdown']);
-			$html = $this->rewriteAttachmentUrls($html);
-
-			$pages[] = [
-				'id' => $page['id'],
-				'title' => $page['title'],
-				'html' => $html,
-				'summary' => $this->makeSummary($html),
-			];
-		}
-
-		return $pages;
-	}
-
-	/**
-	 * @param array<string, true> $copied
-	 */
-	private function copyAttachmentFolder(
+	private function collectAttachmentFolder(
 		int $collectiveId,
 		int $pageId,
 		string $userId,
-		string $outDir,
-		array &$copied,
+		array &$attachments,
+		array &$collected,
 	): void {
 		$folderName = '.attachments.' . $pageId;
-		if (isset($copied[$folderName])) {
+		if (isset($collected[$folderName])) {
 			return;
 		}
 
@@ -165,25 +157,30 @@ class StaticSiteService {
 				return;
 			}
 
-			$this->copyFolderToDisk($folder, $outDir . '/' . $folderName);
-			$copied[$folderName] = true;
+			$this->collectFolder($folder, $folderName, $attachments);
+			$collected[$folderName] = true;
 		} catch (\Throwable) {
 			// Skip attachment folders we cannot read.
 		}
 	}
 
-	private function copyFolderToDisk(Folder $folder, string $localPath): void {
-		@mkdir($localPath, 0o700, true);
+	/**
+	 * @param list<array{path: string, content: string}> $attachments
+	 */
+	private function collectFolder(Folder $folder, string $relativePath, array &$attachments): void {
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof File) {
 				$content = $node->getContent();
 				if (is_string($content)) {
-					file_put_contents($localPath . '/' . $node->getName(), $content);
+					$attachments[] = [
+						'path' => $relativePath . '/' . $node->getName(),
+						'content' => base64_encode($content),
+					];
 				}
 				continue;
 			}
 			if ($node instanceof Folder) {
-				$this->copyFolderToDisk($node, $localPath . '/' . $node->getName());
+				$this->collectFolder($node, $relativePath . '/' . $node->getName(), $attachments);
 			}
 		}
 	}
@@ -200,41 +197,25 @@ class StaticSiteService {
 	}
 
 	/**
-	 * Pages live in page-<id>/index.html; attachment folders sit at the site root.
-	 */
-	private function rewriteAttachmentUrls(string $html): string {
-		return preg_replace(
-			'#(?<!\.\./)(?:\./)?\.attachments\.(\d+/)#',
-			'../.attachments.$1',
-			$html,
-		) ?? $html;
-	}
-
-	private function makeSummary(string $html): string {
-		$text = trim(preg_replace('/\s+/u', ' ', strip_tags($html)) ?? '');
-		if ($text === '') {
-			return '';
-		}
-		if (mb_strlen($text) <= 160) {
-			return $text;
-		}
-
-		return mb_substr($text, 0, 157) . '…';
-	}
-
-	/**
-	 * Copy the generated site (a folder of HTML) into the user's files.
+	 * Extract the rendered site ZIP into the user's files.
 	 *
 	 * @return string Path of the output folder, relative to the user's files
 	 *
 	 * @throws ServiceException
 	 */
-	private function storeOutput(string $userId, string $localOutDir, string $title): string {
-		if (!is_dir($localOutDir) || !is_file($localOutDir . '/index.html')) {
-			throw new ServiceException('Static site generation did not produce any output');
+	private function storeZip(string $userId, string $zipBytes, string $title): string {
+		$tmpFile = tempnam(sys_get_temp_dir(), 'collectives-ssg-');
+		if ($tmpFile === false) {
+			throw new ServiceException('Could not create a temporary file for the static site');
 		}
 
+		$zip = new ZipArchive();
 		try {
+			file_put_contents($tmpFile, $zipBytes);
+			if ($zip->open($tmpFile) !== true) {
+				throw new ServiceException('The static site renderer returned an invalid archive');
+			}
+
 			$userFolder = $this->rootFolder->getUserFolder($userId);
 			$baseFolder = $userFolder->nodeExists(self::OUTPUT_BASE_DIR)
 				? $userFolder->get(self::OUTPUT_BASE_DIR)
@@ -245,49 +226,91 @@ class StaticSiteService {
 
 			$targetName = $this->safeName($title) . '-' . date('Ymd-His');
 			$targetFolder = $baseFolder->newFolder($targetName);
-			$this->copyTreeToFolder($localOutDir, $targetFolder);
+
+			$wroteIndex = false;
+			for ($i = 0; $i < $zip->numFiles; $i++) {
+				$name = $zip->getNameIndex($i);
+				if ($name === false) {
+					continue;
+				}
+				$segments = $this->sanitizeEntry($name);
+				if ($segments === null) {
+					continue;
+				}
+				if (str_ends_with($name, '/')) {
+					$this->getOrCreateFolder($targetFolder, $segments);
+					continue;
+				}
+
+				$content = $zip->getFromIndex($i);
+				if ($content === false) {
+					continue;
+				}
+				$fileName = array_pop($segments);
+				$parent = $this->getOrCreateFolder($targetFolder, $segments);
+				$parent->newFile($fileName, $content);
+				if ($segments === [] && $fileName === 'index.html') {
+					$wroteIndex = true;
+				}
+			}
+
+			if (!$wroteIndex) {
+				throw new ServiceException('The static site archive did not contain an index page');
+			}
 
 			return $userFolder->getRelativePath($targetFolder->getPath()) ?? self::OUTPUT_BASE_DIR . '/' . $targetName;
 		} catch (ServiceException $e) {
 			throw $e;
 		} catch (\Throwable $e) {
 			throw new ServiceException('Failed to store the static site: ' . $e->getMessage(), 0, $e);
+		} finally {
+			@$zip->close();
+			@unlink($tmpFile);
 		}
 	}
 
-	private function copyTreeToFolder(string $localDir, Folder $target): void {
-		foreach (scandir($localDir) ?: [] as $item) {
-			if ($item === '.' || $item === '..') {
+	/**
+	 * Split a ZIP entry name into safe path segments, rejecting traversal.
+	 *
+	 * @return list<string>|null
+	 */
+	private function sanitizeEntry(string $name): ?array {
+		$name = str_replace('\\', '/', $name);
+		$segments = [];
+		foreach (explode('/', $name) as $segment) {
+			if ($segment === '' || $segment === '.') {
 				continue;
 			}
-			$localPath = $localDir . '/' . $item;
-			if (is_dir($localPath)) {
-				$this->copyTreeToFolder($localPath, $target->newFolder($item));
-				continue;
+			if ($segment === '..') {
+				return null;
 			}
-			$content = file_get_contents($localPath);
-			if ($content !== false) {
-				$target->newFile($item, $content);
-			}
+			$segments[] = $segment;
 		}
+
+		return $segments === [] ? null : $segments;
+	}
+
+	/**
+	 * @param list<string> $segments
+	 */
+	private function getOrCreateFolder(Folder $base, array $segments): Folder {
+		$folder = $base;
+		foreach ($segments as $segment) {
+			if ($folder->nodeExists($segment)) {
+				$existing = $folder->get($segment);
+				if ($existing instanceof Folder) {
+					$folder = $existing;
+					continue;
+				}
+			}
+			$folder = $folder->newFolder($segment);
+		}
+
+		return $folder;
 	}
 
 	private function safeName(string $name): string {
 		$clean = trim(preg_replace('/[^\p{L}\p{N} _-]+/u', '', $name) ?? '');
 		return $clean !== '' ? $clean : 'Collectives';
-	}
-
-	private function removeDir(string $path): void {
-		if (!is_dir($path)) {
-			return;
-		}
-		$items = new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-			\RecursiveIteratorIterator::CHILD_FIRST,
-		);
-		foreach ($items as $item) {
-			$item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
-		}
-		@rmdir($path);
 	}
 }

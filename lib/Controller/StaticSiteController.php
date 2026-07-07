@@ -9,17 +9,21 @@ declare(strict_types=1);
 
 namespace OCA\Collectives\Controller;
 
+use OCA\Collectives\BackgroundJob\GenerateStaticSite;
 use OCA\Collectives\Service\StaticSiteService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSException;
 use OCP\AppFramework\OCSController;
+use OCP\BackgroundJob\IJobList;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 /**
- * Renders static sites from collectives via PHP CommonMark.
+ * Queues static site generation. The actual rendering runs in a background job
+ * that delegates to the external renderer service (see ssg/), so nothing is
+ * rendered in the request worker.
  */
 class StaticSiteController extends OCSController {
 	use UserTrait;
@@ -28,6 +32,7 @@ class StaticSiteController extends OCSController {
 		string $appName,
 		IRequest $request,
 		private StaticSiteService $service,
+		private IJobList $jobList,
 		private LoggerInterface $logger,
 		private ?string $userId,
 	) {
@@ -35,24 +40,46 @@ class StaticSiteController extends OCSController {
 	}
 
 	/**
-	 * Render the selected collective pages as a static site and store it in the user's files.
+	 * Queue rendering of the selected collective pages as a static site.
+	 *
+	 * The site is generated asynchronously and stored in the user's files; the
+	 * user is notified when it is ready.
 	 *
 	 * @param int $collectiveId ID of the collective
 	 * @param int[] $pageIds IDs of the pages to include
 	 * @param string|null $title Optional title shown on the generated site
 	 *
-	 * @return DataResponse<Http::STATUS_OK, array{path: string, pages: int}, array{}>
-	 * @throws OCSException Build or storage failed
+	 * @return DataResponse<Http::STATUS_OK, array{queued: bool}, array{}>
+	 * @throws OCSException Renderer not configured or invalid request
 	 *
-	 * 200: Static site generated and stored
+	 * 200: Static site generation queued
 	 */
 	#[NoAdminRequired]
 	public function create(int $collectiveId, array $pageIds = [], ?string $title = null): DataResponse {
+		if (!$this->service->isConfigured()) {
+			throw new OCSException('Static site renderer service is not configured', Http::STATUS_NOT_IMPLEMENTED);
+		}
+
+		$pageIds = array_values(array_filter(
+			array_map(intval(...), $pageIds),
+			static fn (int $id): bool => $id > 0,
+		));
+		if ($pageIds === []) {
+			throw new OCSException('No pages selected', Http::STATUS_BAD_REQUEST);
+		}
+
 		try {
-			return new DataResponse($this->service->generateSite($this->getUid(), $collectiveId, $pageIds, $title));
+			$this->jobList->add(GenerateStaticSite::class, [
+				'userId' => $this->getUid(),
+				'collectiveId' => $collectiveId,
+				'pageIds' => $pageIds,
+				'title' => $title,
+			]);
 		} catch (\Throwable $e) {
-			$this->logger->error('Failed to generate static site', ['exception' => $e]);
+			$this->logger->error('Failed to queue static site generation', ['exception' => $e]);
 			throw new OCSException($e->getMessage(), Http::STATUS_INTERNAL_SERVER_ERROR, $e);
 		}
+
+		return new DataResponse(['queued' => true]);
 	}
 }

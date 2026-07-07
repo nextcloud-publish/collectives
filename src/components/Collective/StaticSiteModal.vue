@@ -15,7 +15,7 @@
 
 		<template v-else>
 			<p class="ssg-modal__hint">
-				{{ t('collectives', 'Select the pages to include in the static site.') }}
+				{{ t('collectives', 'Select the pages to include in the static site. Generation runs in the background — you will be notified when the site is ready in your files.') }}
 			</p>
 
 			<NcCheckboxRadioSwitch
@@ -47,7 +47,7 @@
 					<WebIcon v-else :size="20" />
 				</template>
 				{{ generating
-					? t('collectives', 'Generating …')
+					? t('collectives', 'Starting …')
 					: n('collectives', 'Generate site ({count} page)', 'Generate site ({count} pages)', selected.length, { count: selected.length }) }}
 			</NcButton>
 		</template>
@@ -148,21 +148,16 @@ export default {
 		async onGenerate() {
 			this.generating = true
 			try {
-				const response = await generateStaticSite(this.collective.id, this.selected, this.collective.name)
-				const { path, pages } = response.data.ocs.data
-				showSuccess(n('collectives',
-					'Static site with %n page generated and saved to {path}',
-					'Static site with %n pages generated and saved to {path}',
-					pages,
-					{ path }))
+				await generateStaticSite(this.collective.id, this.selected, this.collective.name)
+				showSuccess(t('collectives', 'Static site generation started. You will be notified when it is ready.'))
 				this.$emit('close')
 			} catch (e) {
-				console.error('Failed to generate static site', e)
+				console.error('Failed to start static site generation', e)
 				let errorMessage = ''
 				if (e.response?.data?.ocs?.meta?.message) {
 					errorMessage = e.response.data.ocs.meta.message
 				}
-				showError(t('collectives', 'Could not generate static site. {errorMessage}', { errorMessage }))
+				showError(t('collectives', 'Could not start static site generation. {errorMessage}', { errorMessage }))
 			} finally {
 				this.generating = false
 			}

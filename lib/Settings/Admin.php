@@ -26,6 +26,9 @@ class Admin implements ISettings {
 	public function getForm(): TemplateResponse {
 		$parameters = [
 			'default_user_folder' => $this->appConfig->getValueString('collectives', 'default_user_folder', ''),
+			'ssg_renderer_url' => $this->appConfig->getValueString('collectives', 'ssg_renderer_url', ''),
+			// Never expose the secret itself, only whether one is set.
+			'ssg_renderer_secret_set' => $this->appConfig->getValueString('collectives', 'ssg_renderer_secret', '') !== '',
 		];
 		$this->initialState->provideInitialState('adminSettings', $parameters);
 
