@@ -13,9 +13,6 @@ declare(strict_types=1);
  * Endpoints:
  *   GET  /health  -> { "status": "ok" }
  *   POST /render  -> ZIP archive of the rendered site (Content-Type: application/zip)
- *
- * Authentication (optional): if COLLECTIVES_SSG_SECRET is set, requests to
- * /render must send `Authorization: Bearer <secret>`.
  */
 
 use Collectives\Ssg\SiteRenderer;
@@ -48,16 +45,6 @@ if ($method !== 'POST') {
 	header('Allow: POST');
 	sendJson(405, ['error' => 'Method not allowed']);
 	return true;
-}
-
-$secret = getenv('COLLECTIVES_SSG_SECRET');
-if (is_string($secret) && $secret !== '') {
-	$auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-	$provided = preg_match('/^Bearer\s+(.+)$/i', (string)$auth, $m) ? trim($m[1]) : '';
-	if ($provided === '' || !hash_equals($secret, $provided)) {
-		sendJson(401, ['error' => 'Unauthorized']);
-		return true;
-	}
 }
 
 $raw = file_get_contents('php://input');

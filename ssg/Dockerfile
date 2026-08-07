@@ -25,7 +25,6 @@ COPY --from=vendor /app /app
 RUN addgroup -S ssg && adduser -S ssg -G ssg
 USER ssg
 
-ENV COLLECTIVES_SSG_SECRET=""
 EXPOSE 8080
 
 # Built-in PHP server with public/index.php acting as the front controller/router.

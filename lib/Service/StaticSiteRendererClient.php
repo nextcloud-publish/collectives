@@ -24,7 +24,6 @@ use Throwable;
  */
 class StaticSiteRendererClient {
 	public const CONFIG_URL = 'ssg_renderer_url';
-	public const CONFIG_SECRET = 'ssg_renderer_secret';
 
 	/** Rendering a large collective can take a while. */
 	private const TIMEOUT = 600;
@@ -64,20 +63,14 @@ class StaticSiteRendererClient {
 			throw new StaticSiteRendererException('Failed to encode the renderer payload');
 		}
 
-		$headers = [
-			'Content-Type' => 'application/json',
-			'Accept' => 'application/zip',
-		];
-		$secret = $this->appConfig->getValueString(Application::APP_NAME, self::CONFIG_SECRET, '');
-		if ($secret !== '') {
-			$headers['Authorization'] = 'Bearer ' . $secret;
-		}
-
 		$client = $this->clientService->newClient();
 		try {
 			$response = $client->post($url . '/render', [
 				'body' => $body,
-				'headers' => $headers,
+				'headers' => [
+					'Content-Type' => 'application/json',
+					'Accept' => 'application/zip',
+				],
 				'timeout' => self::TIMEOUT,
 				'http_errors' => false,
 				// The renderer typically runs on an internal/local address.

@@ -37,9 +37,6 @@ Returns `200 {"status":"ok"}`. Used for container health checks.
 Renders a site and returns a ZIP archive (`Content-Type: application/zip`). The
 number of rendered pages is returned in the `X-Rendered-Pages` response header.
 
-If the `COLLECTIVES_SSG_SECRET` environment variable is set, the request must carry
-a matching `Authorization: Bearer <secret>` header.
-
 Request body (JSON):
 
 ```json
@@ -65,7 +62,6 @@ Request body (JSON):
 
 ```bash
 cd ssg
-export COLLECTIVES_SSG_SECRET="$(openssl rand -hex 32)"
 docker compose up -d --build
 ```
 
@@ -73,11 +69,11 @@ The service listens on port `8080` (override with `COLLECTIVES_SSG_PORT`).
 
 ### Configure the app
 
-In Nextcloud: **Administration settings → Collectives**, set:
+In Nextcloud: **Administration settings → Additional settings → Collectives**, set:
 
-- **Static site renderer URL**: e.g. `http://collectives-ssg-renderer:8080`
-  (or the reachable URL of the host running this container).
-- **Shared secret**: the same value as `COLLECTIVES_SSG_SECRET`.
+- **Static site renderer URL** to a URL the Nextcloud container can reach, e.g.
+  `http://host.docker.internal:8080` or `http://collectives-ssg-renderer:8080`
+  (only if both containers share a Docker network).
 
 ## Local development
 
