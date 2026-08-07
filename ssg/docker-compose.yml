@@ -8,9 +8,15 @@ services:
     container_name: collectives-ssg-renderer
     ports:
       - "${COLLECTIVES_SSG_PORT:-8080}:8080"
+    volumes:
+      # Rendered sites are served from here, so they have to survive restarts.
+      - collectives-ssg-sites:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/health') ? 0 : 1);"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  collectives-ssg-sites:

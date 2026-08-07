@@ -13,17 +13,23 @@ RUN composer dump-autoload --no-dev --optimize
 # --- Runtime stage ---
 FROM php:8.3-cli-alpine
 
-RUN apk add --no-cache libzip oniguruma \
-	&& apk add --no-cache --virtual .build-deps libzip-dev oniguruma-dev \
-	&& docker-php-ext-install -j"$(nproc)" zip mbstring \
+RUN apk add --no-cache oniguruma \
+	&& apk add --no-cache --virtual .build-deps oniguruma-dev \
+	&& docker-php-ext-install -j"$(nproc)" mbstring \
 	&& apk del .build-deps
 
 WORKDIR /app
 COPY --from=vendor /app /app
 
 # Non-root for safety
-RUN addgroup -S ssg && adduser -S ssg -G ssg
+RUN addgroup -S ssg && adduser -S ssg -G ssg \
+	&& mkdir -p /data/sites \
+	&& chown -R ssg:ssg /data
 USER ssg
+
+# Rendered sites live here and are served from /sites/<id>/.
+ENV COLLECTIVES_SSG_DATA_DIR=/data/sites
+VOLUME ["/data"]
 
 EXPOSE 8080
 

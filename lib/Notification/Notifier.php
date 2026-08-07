@@ -53,24 +53,21 @@ class Notifier implements INotifier {
 		switch ($notification->getSubject()) {
 			case self::SUBJECT_GENERATED:
 				$pages = isset($params['pages']) ? (int)$params['pages'] : 0;
-				$path = isset($params['path']) ? (string)$params['path'] : '';
+				$url = isset($params['url']) ? (string)$params['url'] : '';
 
 				$notification->setParsedSubject(
 					$l->t('Static site for "%s" is ready', [$title]),
 				);
 				$notification->setParsedMessage(
 					$l->n(
-						'%n page was exported to %s.',
-						'%n pages were exported to %s.',
+						'%n page is published at %s.',
+						'%n pages are published at %s.',
 						$pages,
-						[$path],
+						[$url],
 					),
 				);
-				if ($path !== '') {
-					$notification->setLink($this->urlGenerator->linkToRouteAbsolute(
-						'files.view.index',
-						['dir' => '/' . ltrim($path, '/')],
-					));
+				if ($url !== '') {
+					$notification->setLink($url);
 				}
 
 				return $notification;

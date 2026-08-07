@@ -21,7 +21,7 @@
 
 		<NcSettingsSection
 			:name="t('collectives', 'Static site renderer')"
-			:description="t('collectives', 'External service that renders static sites from collectives. Run the container from the app\'s ssg/ directory and enter its URL below. When unset, the &quot;Generate static site&quot; feature is disabled.')">
+			:description="t('collectives', 'External service that renders and hosts static sites from collectives. Run the container from the app\'s ssg/ directory and enter its URL below. When unset, the &quot;Generate static site&quot; feature is disabled.')">
 			<NcTextField
 				id="ssgRendererUrl"
 				v-model="ssgRendererUrl"
@@ -33,6 +33,19 @@
 				:helperText="ssgRendererUrlHint"
 				@keydown.enter="saveRendererUrl"
 				@blur="saveRendererUrl" />
+
+			<NcTextField
+				id="ssgPublicUrl"
+				v-model="ssgPublicUrl"
+				name="ssgPublicUrl"
+				type="url"
+				class="ssg-public-url"
+				:label="t('collectives', 'Public site URL')"
+				placeholder="http://localhost:8080"
+				:error="ssgPublicUrlError"
+				:helperText="ssgPublicUrlHint"
+				@keydown.enter="savePublicUrl"
+				@blur="savePublicUrl" />
 		</NcSettingsSection>
 	</div>
 </template>
@@ -48,6 +61,7 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 const adminSettings = loadState<{
 	default_user_folder: string
 	ssg_renderer_url: string
+	ssg_public_url: string
 }>('collectives', 'adminSettings')
 
 let originalDefaultUserFolder = adminSettings.default_user_folder
@@ -55,6 +69,9 @@ const defaultUserFolder = ref(adminSettings.default_user_folder)
 
 let originalRendererUrl = adminSettings.ssg_renderer_url
 const ssgRendererUrl = ref(adminSettings.ssg_renderer_url)
+
+let originalPublicUrl = adminSettings.ssg_public_url
+const ssgPublicUrl = ref(adminSettings.ssg_public_url)
 
 const defaultUserFolderError = computed(() => {
 	return defaultUserFolder.value !== ''
@@ -75,6 +92,16 @@ const ssgRendererUrlHint = computed(() => {
 	return ssgRendererUrlError.value
 		? t('collectives', 'A URL starting with "http://" or "https://" is expected')
 		: ''
+})
+
+const ssgPublicUrlError = computed(() => {
+	return ssgPublicUrl.value !== '' && !/^https?:\/\/.+/.test(ssgPublicUrl.value)
+})
+
+const ssgPublicUrlHint = computed(() => {
+	return ssgPublicUrlError.value
+		? t('collectives', 'A URL starting with "http://" or "https://" is expected')
+		: t('collectives', 'URL under which visitors reach the renderer. Leave empty to use the renderer service URL.')
 })
 
 /**
@@ -106,4 +133,25 @@ async function saveRendererUrl() {
 		},
 	})
 }
+
+/**
+ * Saves the public URL under which generated sites are reachable
+ */
+async function savePublicUrl() {
+	if (ssgPublicUrlError.value || originalPublicUrl === ssgPublicUrl.value) {
+		return
+	}
+	globalThis.OCP.AppConfig.setValue('collectives', 'ssg_public_url', ssgPublicUrl.value, {
+		success() {
+			originalPublicUrl = ssgPublicUrl.value
+			showSuccess(t('collectives', 'Saved public site URL'))
+		},
+	})
+}
 </script>
+
+<style lang="scss" scoped>
+.ssg-public-url {
+	margin-block-start: 12px;
+}
+</style>

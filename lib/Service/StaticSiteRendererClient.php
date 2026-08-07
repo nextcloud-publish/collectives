@@ -19,11 +19,12 @@ use Throwable;
  * Talks to the external static site renderer microservice (see ssg/).
  *
  * The renderer runs in a separate, horizontally scalable Docker container. This
- * client ships the page Markdown + attachments to it and returns the rendered
- * site as a ZIP archive, so no rendering happens inside the Nextcloud process.
+ * client ships the page Markdown + attachments to it; the renderer stores the
+ * rendered site and serves it itself, so the app only keeps the resulting URL.
  */
 class StaticSiteRendererClient {
 	public const CONFIG_URL = 'ssg_renderer_url';
+	public const CONFIG_PUBLIC_URL = 'ssg_public_url';
 
 	/** Rendering a large collective can take a while. */
 	private const TIMEOUT = 600;
@@ -44,11 +45,23 @@ class StaticSiteRendererClient {
 	}
 
 	/**
-	 * Render the given payload into a static site ZIP archive.
+	 * Base URL that browsers use to reach the renderer.
+	 *
+	 * Falls back to the internal URL, which differs whenever Nextcloud reaches
+	 * the renderer on a container-only address.
+	 */
+	private function getPublicUrl(): string {
+		$publicUrl = rtrim(trim($this->appConfig->getValueString(Application::APP_NAME, self::CONFIG_PUBLIC_URL, '')), '/');
+
+		return $publicUrl !== '' ? $publicUrl : $this->getUrl();
+	}
+
+	/**
+	 * Render the given payload into a site hosted by the renderer service.
 	 *
 	 * @param array{title: string, user: string, pages: list<array{id: int, title: string, markdown: string}>, attachments: list<array{path: string, content: string}>} $payload
 	 *
-	 * @return array{zip: string, pages: int}
+	 * @return array{url: string, pages: int}
 	 *
 	 * @throws StaticSiteRendererException
 	 */
@@ -69,7 +82,7 @@ class StaticSiteRendererClient {
 				'body' => $body,
 				'headers' => [
 					'Content-Type' => 'application/json',
-					'Accept' => 'application/zip',
+					'Accept' => 'application/json',
 				],
 				'timeout' => self::TIMEOUT,
 				'http_errors' => false,
@@ -84,16 +97,18 @@ class StaticSiteRendererClient {
 		$status = $response->getStatusCode();
 		$content = (string)$response->getBody();
 
-		if ($status !== 200) {
+		if ($status !== 200 && $status !== 201) {
 			throw new StaticSiteRendererException('Static site renderer returned an error: ' . $this->extractError($content, $status));
 		}
-		if ($content === '') {
-			throw new StaticSiteRendererException('Static site renderer returned an empty response');
+
+		$decoded = json_decode($content, true);
+		if (!is_array($decoded) || !isset($decoded['path']) || !is_string($decoded['path']) || $decoded['path'] === '') {
+			throw new StaticSiteRendererException('Static site renderer returned an unexpected response');
 		}
 
 		return [
-			'zip' => $content,
-			'pages' => (int)($response->getHeader('X-Rendered-Pages') ?: 0),
+			'url' => $this->getPublicUrl() . '/' . ltrim($decoded['path'], '/'),
+			'pages' => (int)($decoded['pages'] ?? 0),
 		];
 	}
 

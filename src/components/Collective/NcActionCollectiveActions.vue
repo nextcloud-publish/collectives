@@ -55,6 +55,16 @@
 			</template>
 			{{ t('collectives', 'Generate static site') }}
 		</NcActionButton>
+		<NcActionLink
+			v-if="collective.userStaticSiteUrl"
+			closeAfterClick
+			:href="collective.userStaticSiteUrl"
+			target="_blank">
+			{{ t('collectives', 'Open static site') }}
+			<template #icon>
+				<OpenInNewIcon :size="20" />
+			</template>
+		</NcActionLink>
 		<NcActionButton
 			v-if="isCollectiveAdmin(collective)"
 			closeAfterClick

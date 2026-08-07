@@ -78,6 +78,7 @@ class Collective extends Entity implements JsonSerializable {
 	protected bool $userShowMembers = Collective::defaultShowMembers;
 	protected bool $userShowRecentPages = Collective::defaultShowRecentPages;
 	protected array $userFavoritePages = [];
+	protected ?string $userStaticSiteUrl = null;
 	protected bool $canLeave = false;
 
 	public function getCircleId(): string {
@@ -203,6 +204,10 @@ class Collective extends Entity implements JsonSerializable {
 		return $this->userFavoritePages;
 	}
 
+	public function getUserStaticSiteUrl(): ?string {
+		return $this->userStaticSiteUrl;
+	}
+
 	public function getCanLeave(): bool {
 		return $this->canLeave;
 	}
@@ -231,6 +236,10 @@ class Collective extends Entity implements JsonSerializable {
 
 	public function setUserFavoritePages(array $userFavoritePages): void {
 		$this->userFavoritePages = $userFavoritePages;
+	}
+
+	public function setUserStaticSiteUrl(?string $userStaticSiteUrl): void {
+		$this->userStaticSiteUrl = $userStaticSiteUrl;
 	}
 
 	public function getUserPermissions(bool $isShare = false): int {
@@ -309,6 +318,7 @@ class Collective extends Entity implements JsonSerializable {
 			'userShowMembers' => $this->userShowMembers,
 			'userShowRecentPages' => $this->userShowRecentPages,
 			'userFavoritePages' => $this->userFavoritePages,
+			'userStaticSiteUrl' => $this->userStaticSiteUrl,
 			'canLeave' => $this->getCanLeave(),
 		];
 	}

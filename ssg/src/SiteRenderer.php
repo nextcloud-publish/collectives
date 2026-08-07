@@ -10,11 +10,10 @@ declare(strict_types=1);
 namespace Collectives\Ssg;
 
 use RuntimeException;
-use ZipArchive;
 
 /**
- * Renders a static site (index + per-page HTML + attachments) and returns it as
- * a ZIP archive.
+ * Renders a static site (index + per-page HTML + attachments) into a directory
+ * that the service serves directly.
  *
  * Ports the rendering and layout that used to live in the Collectives app
  * (StaticSiteService + StaticSiteRenderer) into a standalone, horizontally
@@ -27,7 +26,7 @@ class SiteRenderer {
 	}
 
 	/**
-	 * Build the static site from the request payload and return the ZIP bytes.
+	 * Build the static site from the request payload into $outDir.
 	 *
 	 * Expected payload shape:
 	 *   {
@@ -39,9 +38,9 @@ class SiteRenderer {
 	 *
 	 * @param array<string, mixed> $payload
 	 *
-	 * @return array{zip: string, pages: int}
+	 * @return int Number of rendered pages
 	 */
-	public function build(array $payload): array {
+	public function build(array $payload, string $outDir): int {
 		$title = isset($payload['title']) && is_string($payload['title']) && trim($payload['title']) !== ''
 			? trim($payload['title'])
 			: 'Collectives';
@@ -53,43 +52,33 @@ class SiteRenderer {
 			throw new RuntimeException('No pages to render');
 		}
 
-		$workBase = sys_get_temp_dir() . '/collectives-ssg-' . bin2hex(random_bytes(6));
-		$outDir = $workBase . '/out';
-
-		try {
-			if (!@mkdir($outDir, 0o700, true) && !is_dir($outDir)) {
-				throw new RuntimeException('Could not create work directory');
-			}
-
-			$this->writeAttachments($attachments, $outDir);
-
-			$pages = [];
-			foreach ($pagesInput as $page) {
-				if (!is_array($page) || !isset($page['id'], $page['markdown'])) {
-					continue;
-				}
-				$html = $this->markdown->toHtml((string)$page['markdown']);
-				$html = $this->rewriteAttachmentUrls($html);
-				$pages[] = [
-					'id' => (int)$page['id'],
-					'title' => isset($page['title']) && is_string($page['title']) ? $page['title'] : 'Untitled',
-					'html' => $html,
-					'summary' => $this->makeSummary($html),
-				];
-			}
-
-			$this->renderIndex($outDir, $pages, $title, $user);
-			foreach ($pages as $page) {
-				$this->renderPage($outDir, $page, $title, $user);
-			}
-
-			return [
-				'zip' => $this->zipDirectory($outDir),
-				'pages' => count($pages),
-			];
-		} finally {
-			$this->removeDir($workBase);
+		if (!is_dir($outDir) && !@mkdir($outDir, 0o755, true) && !is_dir($outDir)) {
+			throw new RuntimeException('Could not create the site directory');
 		}
+
+		$this->writeAttachments($attachments, $outDir);
+
+		$pages = [];
+		foreach ($pagesInput as $page) {
+			if (!is_array($page) || !isset($page['id'], $page['markdown'])) {
+				continue;
+			}
+			$html = $this->markdown->toHtml((string)$page['markdown']);
+			$html = $this->rewriteAttachmentUrls($html);
+			$pages[] = [
+				'id' => (int)$page['id'],
+				'title' => isset($page['title']) && is_string($page['title']) ? $page['title'] : 'Untitled',
+				'html' => $html,
+				'summary' => $this->makeSummary($html),
+			];
+		}
+
+		$this->renderIndex($outDir, $pages, $title, $user);
+		foreach ($pages as $page) {
+			$this->renderPage($outDir, $page, $title, $user);
+		}
+
+		return count($pages);
 	}
 
 	/**
@@ -111,7 +100,7 @@ class SiteRenderer {
 
 			$target = $outDir . '/' . $relative;
 			$dir = dirname($target);
-			if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
+			if (!is_dir($dir) && !@mkdir($dir, 0o755, true) && !is_dir($dir)) {
 				continue;
 			}
 			file_put_contents($target, $content);
@@ -172,7 +161,7 @@ class SiteRenderer {
 	 */
 	private function renderPage(string $outDir, array $page, string $siteTitle, string $userId): void {
 		$dir = $outDir . '/page-' . $page['id'];
-		@mkdir($dir, 0o700, true);
+		@mkdir($dir, 0o755, true);
 
 		$main = '<article class="page">'
 			. '<a class="back" href="../">← Back to overview</a>'
@@ -302,50 +291,5 @@ HTML;
 
 	private function e(string $value): string {
 		return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-	}
-
-	private function zipDirectory(string $dir): string {
-		$zipPath = $dir . '.zip';
-		$zip = new ZipArchive();
-		if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-			throw new RuntimeException('Could not create ZIP archive');
-		}
-
-		$items = new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-			\RecursiveIteratorIterator::SELF_FIRST,
-		);
-		foreach ($items as $item) {
-			/** @var \SplFileInfo $item */
-			$relative = substr($item->getPathname(), strlen($dir) + 1);
-			if ($item->isDir()) {
-				$zip->addEmptyDir($relative);
-			} else {
-				$zip->addFile($item->getPathname(), $relative);
-			}
-		}
-		$zip->close();
-
-		$bytes = file_get_contents($zipPath);
-		@unlink($zipPath);
-		if ($bytes === false) {
-			throw new RuntimeException('Could not read generated ZIP archive');
-		}
-
-		return $bytes;
-	}
-
-	private function removeDir(string $path): void {
-		if (!is_dir($path)) {
-			return;
-		}
-		$items = new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-			\RecursiveIteratorIterator::CHILD_FIRST,
-		);
-		foreach ($items as $item) {
-			$item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
-		}
-		@rmdir($path);
 	}
 }

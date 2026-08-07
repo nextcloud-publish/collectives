@@ -30,6 +30,7 @@ namespace OCA\Collectives;
  *     userShowMembers: bool,
  *     userShowRecentPages: bool,
  *     userFavoritePages: list<int>,
+ *     userStaticSiteUrl?: string,
  *     canLeave: bool,
  * }
  *

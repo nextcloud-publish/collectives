@@ -11,27 +11,21 @@ namespace OCA\Collectives\Service;
 
 use OCP\Files\File;
 use OCP\Files\Folder;
-use OCP\Files\IRootFolder;
-use ZipArchive;
 
 /**
  * Orchestrates static site generation.
  *
- * The heavy rendering (Markdown -> HTML, layout, zipping) runs in a separate,
+ * The heavy rendering (Markdown -> HTML, layout) runs in a separate,
  * horizontally scalable renderer service (see ssg/). This service only:
  *   1. gathers the selected pages' Markdown and their attachments,
  *   2. ships them to the renderer via {@see StaticSiteRendererClient},
- *   3. extracts the returned ZIP into the user's Nextcloud files.
+ *   3. returns the URL under which the renderer serves the finished site.
  *
  * It is invoked from a background job so no rendering happens in the request
  * worker.
  */
 class StaticSiteService {
-	/** Folder (in the user's files) where generated sites are stored. */
-	private const OUTPUT_BASE_DIR = 'Collectives Static Sites';
-
 	public function __construct(
-		private IRootFolder $rootFolder,
 		private PageService $pageService,
 		private StaticSiteRendererClient $rendererClient,
 	) {
@@ -42,11 +36,11 @@ class StaticSiteService {
 	}
 
 	/**
-	 * Render the selected pages as a static site and store it in the user's files.
+	 * Render the selected pages as a static site hosted by the renderer service.
 	 *
 	 * @param int[] $pageIds IDs of the pages to include
 	 *
-	 * @return array{path: string, pages: int} Path of the output folder and number of rendered pages
+	 * @return array{url: string, pages: int} URL of the generated site and number of rendered pages
 	 *
 	 * @throws ServiceException
 	 */
@@ -58,10 +52,7 @@ class StaticSiteService {
 			throw new ServiceException('None of the selected pages could be read');
 		}
 
-		$result = $this->rendererClient->render($payload);
-		$path = $this->storeZip($userId, $result['zip'], $title);
-
-		return ['path' => $path, 'pages' => $result['pages']];
+		return $this->rendererClient->render($payload);
 	}
 
 	/**
@@ -194,123 +185,5 @@ class StaticSiteService {
 		}
 
 		return array_map(intval(...), array_unique($matches[1]));
-	}
-
-	/**
-	 * Extract the rendered site ZIP into the user's files.
-	 *
-	 * @return string Path of the output folder, relative to the user's files
-	 *
-	 * @throws ServiceException
-	 */
-	private function storeZip(string $userId, string $zipBytes, string $title): string {
-		$tmpFile = tempnam(sys_get_temp_dir(), 'collectives-ssg-');
-		if ($tmpFile === false) {
-			throw new ServiceException('Could not create a temporary file for the static site');
-		}
-
-		$zip = new ZipArchive();
-		try {
-			file_put_contents($tmpFile, $zipBytes);
-			if ($zip->open($tmpFile) !== true) {
-				throw new ServiceException('The static site renderer returned an invalid archive');
-			}
-
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$baseFolder = $userFolder->nodeExists(self::OUTPUT_BASE_DIR)
-				? $userFolder->get(self::OUTPUT_BASE_DIR)
-				: $userFolder->newFolder(self::OUTPUT_BASE_DIR);
-			if (!$baseFolder instanceof Folder) {
-				throw new ServiceException('Output location is not a folder');
-			}
-
-			$targetName = $this->safeName($title) . '-' . date('Ymd-His');
-			$targetFolder = $baseFolder->newFolder($targetName);
-
-			$wroteIndex = false;
-			for ($i = 0; $i < $zip->numFiles; $i++) {
-				$name = $zip->getNameIndex($i);
-				if ($name === false) {
-					continue;
-				}
-				$segments = $this->sanitizeEntry($name);
-				if ($segments === null) {
-					continue;
-				}
-				if (str_ends_with($name, '/')) {
-					$this->getOrCreateFolder($targetFolder, $segments);
-					continue;
-				}
-
-				$content = $zip->getFromIndex($i);
-				if ($content === false) {
-					continue;
-				}
-				$fileName = array_pop($segments);
-				$parent = $this->getOrCreateFolder($targetFolder, $segments);
-				$parent->newFile($fileName, $content);
-				if ($segments === [] && $fileName === 'index.html') {
-					$wroteIndex = true;
-				}
-			}
-
-			if (!$wroteIndex) {
-				throw new ServiceException('The static site archive did not contain an index page');
-			}
-
-			return $userFolder->getRelativePath($targetFolder->getPath()) ?? self::OUTPUT_BASE_DIR . '/' . $targetName;
-		} catch (ServiceException $e) {
-			throw $e;
-		} catch (\Throwable $e) {
-			throw new ServiceException('Failed to store the static site: ' . $e->getMessage(), 0, $e);
-		} finally {
-			@$zip->close();
-			@unlink($tmpFile);
-		}
-	}
-
-	/**
-	 * Split a ZIP entry name into safe path segments, rejecting traversal.
-	 *
-	 * @return list<string>|null
-	 */
-	private function sanitizeEntry(string $name): ?array {
-		$name = str_replace('\\', '/', $name);
-		$segments = [];
-		foreach (explode('/', $name) as $segment) {
-			if ($segment === '' || $segment === '.') {
-				continue;
-			}
-			if ($segment === '..') {
-				return null;
-			}
-			$segments[] = $segment;
-		}
-
-		return $segments === [] ? null : $segments;
-	}
-
-	/**
-	 * @param list<string> $segments
-	 */
-	private function getOrCreateFolder(Folder $base, array $segments): Folder {
-		$folder = $base;
-		foreach ($segments as $segment) {
-			if ($folder->nodeExists($segment)) {
-				$existing = $folder->get($segment);
-				if ($existing instanceof Folder) {
-					$folder = $existing;
-					continue;
-				}
-			}
-			$folder = $folder->newFolder($segment);
-		}
-
-		return $folder;
-	}
-
-	private function safeName(string $name): string {
-		$clean = trim(preg_replace('/[^\p{L}\p{N} _-]+/u', '', $name) ?? '');
-		return $clean !== '' ? $clean : 'Collectives';
 	}
 }

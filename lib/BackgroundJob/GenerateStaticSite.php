@@ -11,6 +11,7 @@ namespace OCA\Collectives\BackgroundJob;
 
 use OCA\Collectives\AppInfo\Application;
 use OCA\Collectives\Notification\Notifier;
+use OCA\Collectives\Service\CollectiveUserSettingsService;
 use OCA\Collectives\Service\StaticSiteService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\QueuedJob;
@@ -29,6 +30,7 @@ class GenerateStaticSite extends QueuedJob {
 	public function __construct(
 		ITimeFactory $time,
 		private StaticSiteService $service,
+		private CollectiveUserSettingsService $userSettingsService,
 		private INotificationManager $notificationManager,
 		private LoggerInterface $logger,
 	) {
@@ -55,10 +57,11 @@ class GenerateStaticSite extends QueuedJob {
 
 		try {
 			$result = $this->service->generateSite($userId, $collectiveId, $pageIds, $title);
+			$this->rememberSiteUrl($userId, $collectiveId, $result['url']);
 			$this->notify($userId, $collectiveId, Notifier::SUBJECT_GENERATED, [
 				'title' => $title ?? 'Collectives',
 				'pages' => $result['pages'],
-				'path' => $result['path'],
+				'url' => $result['url'],
 			]);
 		} catch (Throwable $e) {
 			$this->logger->error('Failed to generate static site', ['exception' => $e]);
@@ -66,6 +69,18 @@ class GenerateStaticSite extends QueuedJob {
 				'title' => $title ?? 'Collectives',
 				'error' => $e->getMessage(),
 			]);
+		}
+	}
+
+	/**
+	 * Keep the link on the collective so it stays reachable after the
+	 * notification is gone.
+	 */
+	private function rememberSiteUrl(string $userId, int $collectiveId, string $url): void {
+		try {
+			$this->userSettingsService->setStaticSiteUrl($collectiveId, $userId, $url);
+		} catch (Throwable $e) {
+			$this->logger->warning('Failed to store static site URL', ['exception' => $e]);
 		}
 	}
 

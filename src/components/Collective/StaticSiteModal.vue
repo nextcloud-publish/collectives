@@ -15,7 +15,7 @@
 
 		<template v-else>
 			<p class="ssg-modal__hint">
-				{{ t('collectives', 'Select the pages to include in the static site. Generation runs in the background — you will be notified when the site is ready in your files.') }}
+				{{ t('collectives', 'Select the pages to include in the static site. Generation runs in the background — you will be notified with a link once the site is published.') }}
 			</p>
 
 			<NcCheckboxRadioSwitch

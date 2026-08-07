@@ -108,4 +108,19 @@ class CollectiveUserSettingsService {
 			throw new NotPermittedException($e->getMessage(), 0, $e);
 		}
 	}
+
+	/**
+	 * @throws NotFoundException
+	 * @throws NotPermittedException
+	 */
+	public function setStaticSiteUrl(int $collectiveId, string $userId, ?string $staticSiteUrl): void {
+		$settings = $this->initSettings($collectiveId, $userId);
+		$settings->setStaticSiteUrl($staticSiteUrl);
+
+		try {
+			$this->collectiveUserSettingsMapper->insertOrUpdate($settings);
+		} catch (Exception $e) {
+			throw new NotPermittedException($e->getMessage(), 0, $e);
+		}
+	}
 }
