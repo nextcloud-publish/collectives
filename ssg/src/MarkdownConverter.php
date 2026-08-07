@@ -13,9 +13,6 @@ use League\CommonMark\CommonMarkConverter;
 
 /**
  * Converts Markdown to HTML (matching the Collectives editor output).
- *
- * Mirrors OCA\Collectives\Fs\MarkdownHelper::toHtml() so the static site output
- * is identical to what the app used to render in-process.
  */
 class MarkdownConverter {
 	private CommonMarkConverter $converter;

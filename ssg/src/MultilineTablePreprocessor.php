@@ -14,9 +14,6 @@ namespace Collectives\Ssg;
  * markdown-it-multimd-table) into HTML before CommonMark parsing.
  *
  * Rows ending with a backslash (\) are merged with the following row.
- *
- * NOTE: Kept in sync with lib/Fs/MultilineTablePreprocessor.php in the Collectives
- * app so the rendered output stays identical to the in-app renderer it replaces.
  */
 class MultilineTablePreprocessor {
 	/**

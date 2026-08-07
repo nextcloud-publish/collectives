@@ -12,7 +12,6 @@ namespace OCA\Collectives\Fs;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Exception\CommonMarkException;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
-use League\CommonMark\CommonMarkConverter;
 use League\CommonMark\Extension\CommonMark\Node\Inline\Image;
 use League\CommonMark\Extension\CommonMark\Node\Inline\Link;
 use League\CommonMark\Node\Inline\Text;
@@ -23,29 +22,6 @@ use OC;
 use OCA\Collectives\Db\Collective;
 
 class MarkdownHelper {
-	private static ?CommonMarkConverter $htmlConverter = null;
-
-	/**
-	 * Convert Markdown to HTML (GFM + raw HTML, matching Collectives editor output).
-	 *
-	 * @throws CommonMarkException
-	 */
-	public static function toHtml(string $content): string {
-		if (self::$htmlConverter === null) {
-			self::$htmlConverter = new CommonMarkConverter([
-				'html_input' => 'allow',
-				'allow_unsafe_links' => false,
-			]);
-		}
-
-		$content = MultilineTablePreprocessor::process(
-			$content,
-			static fn (string $cell): string => self::$htmlConverter->convert($cell)->getContent(),
-		);
-
-		return self::$htmlConverter->convert($content)->getContent();
-	}
-
 	/**
 	 * Recursively collect text from a CommonMark node and its descendants
 	 */
