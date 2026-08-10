@@ -31,3 +31,4 @@ cypress/videos/
 /ssg/.runtime/
 /ssg/vendor/
 /ssg/composer.lock
+/ssg/data/

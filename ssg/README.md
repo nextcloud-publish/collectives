@@ -75,8 +75,9 @@ docker compose up -d --build
 ```
 
 The service listens on port `8080` (override with `COLLECTIVES_SSG_PORT`). Rendered
-sites are stored in the `collectives-ssg-sites` volume under `/data/sites` (override
-the location with `COLLECTIVES_SSG_DATA_DIR`), so they survive restarts.
+sites are bind-mounted to `./data` on the host (override with
+`COLLECTIVES_SSG_HOST_DATA_DIR`) and live under `/data/sites` in the container, so
+they survive restarts and are readable outside Docker (e.g. `ssg/data/sites/<id>/`).
 
 ### Configure the app
 
