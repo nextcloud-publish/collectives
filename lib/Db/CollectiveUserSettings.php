@@ -30,6 +30,7 @@ class CollectiveUserSettings extends Entity implements JsonSerializable {
 		'show_members',
 		'show_recent_pages',
 		'favorite_pages',
+		'static_site_url',
 	];
 
 	protected ?int $collectiveId = null;
@@ -104,6 +105,19 @@ class CollectiveUserSettings extends Entity implements JsonSerializable {
 			throw new NotPermittedException('Invalid favorite pages value.');
 		}
 		$this->setSetting('favorite_pages', $favoritePages);
+	}
+
+	/**
+	 * URL of the most recently generated static site, served by the renderer service.
+	 *
+	 * @throws NotPermittedException
+	 * @throws JsonException
+	 */
+	public function setStaticSiteUrl(?string $staticSiteUrl): void {
+		if ($staticSiteUrl !== null && !preg_match('/^https?:\/\/.+/', $staticSiteUrl)) {
+			throw new NotPermittedException('Invalid static site URL.');
+		}
+		$this->setSetting('static_site_url', $staticSiteUrl);
 	}
 
 	public function jsonSerialize(): array {

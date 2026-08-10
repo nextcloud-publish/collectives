@@ -110,6 +110,9 @@
                             "format": "int64"
                         }
                     },
+                    "userStaticSiteUrl": {
+                        "type": "string"
+                    },
                     "canLeave": {
                         "type": "boolean"
                     }

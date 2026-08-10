@@ -26,6 +26,8 @@ class Admin implements ISettings {
 	public function getForm(): TemplateResponse {
 		$parameters = [
 			'default_user_folder' => $this->appConfig->getValueString('collectives', 'default_user_folder', ''),
+			'ssg_renderer_url' => $this->appConfig->getValueString('collectives', 'ssg_renderer_url', ''),
+			'ssg_public_url' => $this->appConfig->getValueString('collectives', 'ssg_public_url', ''),
 		];
 		$this->initialState->provideInitialState('adminSettings', $parameters);
 

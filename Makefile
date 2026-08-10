@@ -77,6 +77,19 @@ lint-appinfo: $(BUILD_TOOLS_DIR)/info.xsd
 	xmllint appinfo/info.xml --noout \
 		--schema $(BUILD_TOOLS_DIR)/info.xsd
 
+# Static site renderer service (see ssg/)
+ssg-build:
+	cd ssg && docker compose build
+
+ssg-up:
+	cd ssg && docker compose up -d
+
+ssg-down:
+	cd ssg && docker compose down
+
+ssg-logs:
+	cd ssg && docker compose logs -f
+
 # Testing
 test: test-php test-js
 
@@ -229,4 +242,4 @@ endif
 	curl -s -X DELETE $(NEXTCLOUD_APPSTORE_API_URL)/collectives/releases/$(RELEASE_NAME) \
 		-u 'collectivecloud:$(NEXTCLOUD_PASSWORD)'
 
-.PHONY: all setup-dev composer node-modules composer-install composer-install-no-dev clean distclean lint lint-js lint-appinfo build build-js-dev build-js-production test test-php test-php-unit test-php-integration test-js test-js-cypress test-js-cypress-watch po php-psalm-baseline text-app-includes release release-github release-appstore delete-release delete-release-from-github delete-release-from-appstore
+.PHONY: all setup-dev composer node-modules composer-install composer-install-no-dev clean distclean lint lint-js lint-appinfo build build-js-dev build-js-production ssg-build ssg-up ssg-down ssg-logs test test-php test-php-unit test-php-integration test-js test-js-cypress test-js-cypress-watch po php-psalm-baseline text-app-includes release release-github release-appstore delete-release delete-release-from-github delete-release-from-appstore
