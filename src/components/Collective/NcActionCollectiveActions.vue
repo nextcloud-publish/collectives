@@ -18,6 +18,7 @@
 		<NcActionButton
 			v-if="collectiveCanShare(collective)"
 			closeAfterClick
+			:disabled="!networkOnline"
 			@click="openShareTab(collective)">
 			{{ t('collectives', 'Share link') }}
 			<template #icon>
@@ -25,7 +26,8 @@
 			</template>
 		</NcActionButton>
 		<NcActionButton
-			@click="openShareTab(collective)">
+			closeAfterClick
+			@click="openPublishDialog()">
 			{{ t('collectives', 'Publish') }}
 			<template #icon>
 				<WebIcon :size="20" />
@@ -182,6 +184,7 @@ export default {
 		...mapActions(useCollectivesStore, [
 			'markCollectiveDeleted',
 			'setMembersCollectiveId',
+			'setPublishCollectiveId',
 			'setSettingsCollectiveId',
 			'setTemplatesCollectiveId',
 			'unmarkCollectiveDeleted',
@@ -203,6 +206,10 @@ export default {
 
 		openCollectiveSettings() {
 			this.setSettingsCollectiveId(this.collective.id)
+		},
+
+		openPublishDialog() {
+			this.setPublishCollectiveId(this.collective.id)
 		},
 
 		leaveCollectiveWithUndo(collective) {

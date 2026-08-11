@@ -44,6 +44,10 @@
 			v-if="showCollectiveMembersModal"
 			:collective="membersCollective"
 			@close="onCloseCollectiveMembersModal" />
+		<CollectivePublishModal
+			v-if="showCollectivePublishModal"
+			:collective="publishCollective"
+			@close="onCloseCollectivePublishModal" />
 		<TemplatesDialog v-if="templatesCollectiveId" />
 	</NcAppNavigation>
 </template>
@@ -58,6 +62,7 @@ import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CollectiveListItem from './Nav/CollectiveListItem.vue'
 import CollectiveMembersModal from './Nav/CollectiveMembersModal.vue'
+import CollectivePublishModal from './Nav/CollectivePublishModal.vue'
 import CollectivesGlobalSettings from './Nav/CollectivesGlobalSettings.vue'
 import CollectivesTrash from './Nav/CollectivesTrash.vue'
 import NewCollectiveModal from './Nav/NewCollectiveModal.vue'
@@ -77,6 +82,7 @@ export default {
 		NcAppNavigationNew,
 		CollectiveListItem,
 		CollectiveMembersModal,
+		CollectivePublishModal,
 		CollectivesGlobalSettings,
 		CollectivesTrash,
 		NewCollectiveModal,
@@ -100,6 +106,7 @@ export default {
 		...mapState(useRootStore, ['isPublic', 'loading']),
 		...mapState(useCollectivesStore, [
 			'membersCollective',
+			'publishCollective',
 			'sortedCollectives',
 			'templatesCollectiveId',
 		]),
@@ -111,6 +118,10 @@ export default {
 
 		showCollectiveMembersModal() {
 			return !!this.membersCollective
+		},
+
+		showCollectivePublishModal() {
+			return !!this.publishCollective
 		},
 	},
 
@@ -129,6 +140,7 @@ export default {
 			'deleteCollective',
 			'restoreCollective',
 			'setMembersCollectiveId',
+			'setPublishCollectiveId',
 		]),
 
 		/**
@@ -164,6 +176,10 @@ export default {
 
 		onCloseCollectiveMembersModal() {
 			this.setMembersCollectiveId(null)
+		},
+
+		onCloseCollectivePublishModal() {
+			this.setPublishCollectiveId(null)
 		},
 	},
 }
