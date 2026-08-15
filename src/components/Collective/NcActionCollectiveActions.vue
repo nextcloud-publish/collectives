@@ -18,7 +18,6 @@
 		<NcActionButton
 			v-if="collectiveCanShare(collective)"
 			closeAfterClick
-			:disabled="!networkOnline"
 			@click="openShareTab(collective)">
 			{{ t('collectives', 'Share link') }}
 			<template #icon>
@@ -26,6 +25,7 @@
 			</template>
 		</NcActionButton>
 		<NcActionButton
+			v-if="isCollectiveAdmin(collective)"
 			closeAfterClick
 			@click="openPublishDialog()">
 			{{ t('collectives', 'Publish') }}
@@ -65,7 +65,10 @@
 			{{ t('collectives', 'Settings') }}
 		</NcActionButton>
 		<NcActionButton
-			:disabled="!networkOnline">
+			v-if="!isPublic && collective.canLeave !== false"
+			closeAfterClick
+			:disabled="!networkOnline"
+			@click="leaveCollectiveWithUndo(collective)">
 			{{ t('collectives', 'Leave collective') }}
 			<template #icon>
 				<LogoutIcon :size="20" />
@@ -97,8 +100,8 @@ import CogIcon from 'vue-material-design-icons/CogOutline.vue'
 import LogoutIcon from 'vue-material-design-icons/Logout.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariantOutline.vue'
-import WebIcon from 'vue-material-design-icons/Web.vue'
 import DownloadIcon from 'vue-material-design-icons/TrayArrowDown.vue'
+import WebIcon from 'vue-material-design-icons/Web.vue'
 import PageTemplateIcon from '../Icon/PageTemplateIcon.vue'
 import { useCirclesStore } from '../../stores/circles.js'
 import { useCollectivesStore } from '../../stores/collectives.js'
