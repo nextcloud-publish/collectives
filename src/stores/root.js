@@ -23,6 +23,7 @@ export const useRootStore = defineStore('root', {
 		shareTokenParam: '',
 		fileIdQuery: '',
 		listenPush: false,
+		isPublishFeatureEnabled: false,
 	}),
 
 	getters: {
@@ -65,5 +66,7 @@ export const useRootStore = defineStore('root', {
 
 		setPrintView() { this.printView = true },
 		setActiveSidebarTab(id) { this.activeSidebarTab = id },
+
+		setPublishFeatureEnabled(enabled) { this.isPublishFeatureEnabled = enabled },
 	},
 })

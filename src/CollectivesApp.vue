@@ -26,6 +26,7 @@
 </template>
 
 <script>
+import { loadState } from '@nextcloud/initial-state'
 import { mapActions, mapState } from 'pinia'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import CollectiveSettings from './components/Nav/CollectiveSettings.vue'
@@ -101,6 +102,7 @@ export default {
 	},
 
 	mounted() {
+		this.loadAdminSettings()
 		this.getCollectivesAndSettings()
 	},
 
@@ -109,6 +111,18 @@ export default {
 		...mapActions(useCollectivesStore, [
 			'getCollectives',
 		]),
+
+		...mapActions(useRootStore, ['setPublishFeatureEnabled']),
+
+		loadAdminSettings() {
+			try {
+				const publishEnabledState = loadState('collectives', 'publish_enabled', true)
+				const isPublishEnabled = publishEnabledState === true || publishEnabledState === 'true'
+				this.setPublishFeatureEnabled(isPublishEnabled)
+			} catch (e) {
+				console.error('Failed to load admin settings:', e)
+			}
+		},
 
 		async getCollectivesAndSettings() {
 			this.loadPending = true

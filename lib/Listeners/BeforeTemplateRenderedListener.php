@@ -20,6 +20,7 @@ use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Template\ITemplateManager;
+use OCP\IAppConfig;
 use OCP\IUserSession;
 use OCP\Util;
 
@@ -31,6 +32,7 @@ class BeforeTemplateRenderedListener implements IEventListener {
 		private IEventDispatcher $eventDispatcher,
 		private IInitialState $initialState,
 		private ITemplateManager $templateManager,
+		private IAppConfig $appConfig,
 	) {
 	}
 
@@ -65,5 +67,9 @@ class BeforeTemplateRenderedListener implements IEventListener {
 		// Provide Collectives user folder as initial state
 		$this->initialState->provideInitialState('user_folder', $userFolder);
 		$this->initialState->provideInitialState('templates', $this->templateManager->listCreators());
+
+		// Provide admin settings as initial state
+		$isPublishEnabled = $this->appConfig->getValueString('collectives', 'publish_enabled', 'true') === 'true';
+		$this->initialState->provideInitialState('publish_enabled', $isPublishEnabled);
 	}
 }
