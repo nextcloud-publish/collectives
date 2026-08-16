@@ -25,7 +25,7 @@
 			</template>
 		</NcActionButton>
 		<NcActionButton
-			v-if="isCollectiveAdmin(collective)"
+			v-if="isCollectiveAdmin(collective) && isPublishFeatureEnabled"
 			closeAfterClick
 			@click="openPublishDialog()">
 			{{ t('collectives', 'Publish') }}
@@ -192,7 +192,7 @@ export default {
 	},
 
 	computed: {
-		...mapState(useRootStore, ['isPublic']),
+		...mapState(useRootStore, ['isPublic', 'isPublishFeatureEnabled']),
 		...mapState(useCollectivesStore, [
 			'collectiveCanShare',
 			'collectivePrintPath',
