@@ -11,6 +11,7 @@ namespace OCA\Collectives\Listeners;
 
 use OCA\Collectives\AppInfo\Application;
 use OCA\Collectives\Fs\UserFolderHelper;
+use OCA\Collectives\Service\PublishSettings;
 use OCA\Collectives\Service\NotFoundException;
 use OCA\Collectives\Service\NotPermittedException;
 use OCA\Text\Event\LoadEditor;
@@ -33,6 +34,7 @@ class BeforeTemplateRenderedListener implements IEventListener {
 		private readonly IInitialState $initialState,
 		private readonly ITemplateManager $templateManager,
 		private readonly IAppConfig $appConfig,
+		private PublishSettings $publishSettings,
 	) {
 	}
 
@@ -69,7 +71,6 @@ class BeforeTemplateRenderedListener implements IEventListener {
 		$this->initialState->provideInitialState('templates', $this->templateManager->listCreators());
 
 		// Provide admin settings as initial state
-		$isPublishEnabled = $this->appConfig->getValueString('collectives', 'publish_enabled', 'true') === 'true';
-		$this->initialState->provideInitialState('publish_enabled', $isPublishEnabled);
+		$this->initialState->provideInitialState('publish_enabled', $this->publishSettings->isPublishEnabled());
 	}
 }
