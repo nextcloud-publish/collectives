@@ -138,6 +138,15 @@ export function updateCollectiveSharePermissions(collectiveId, level) {
 }
 
 /**
+ * URL to download a zip archive with all files of the given collective
+ *
+ * @param {number} collectiveId - id of the collective to export
+ */
+export function exportCollectiveUrl(collectiveId) {
+	return collectivesApiUrl(collectiveId, 'export')
+}
+
+/**
  * Set the edit mode for the given collective
  *
  * @param {number} collectiveId - id of the collective to update

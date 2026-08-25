@@ -42,6 +42,8 @@ return [
 			'requirements' => ['apiVersion' => '(1.0)', 'id' => '\d+']],
 		['name' => 'collective#trash', 'url' => '/api/v{apiVersion}/collectives/{id}', 'verb' => 'DELETE',
 			'requirements' => ['apiVersion' => '(1.0)', 'id' => '\d+']],
+		['name' => 'collective#export', 'url' => '/api/v{apiVersion}/collectives/{id}/export', 'verb' => 'GET',
+			'requirements' => ['apiVersion' => '(1.0)', 'id' => '\d+']],
 
 		// Collectives trash API
 		['name' => 'trash#index', 'url' => '/api/v{apiVersion}/collectives/trash', 'verb' => 'GET',

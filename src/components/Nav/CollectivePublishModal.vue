@@ -12,18 +12,29 @@
 			<h2 class="modal-publish__name">
 				{{ t('collectives', 'Publish website for collective {name}', { name: collective.name }) }}
 			</h2>
+			<NcButton :href="exportUrl" download @click="onDownload">
+				<template #icon>
+					<DownloadIcon :size="20" />
+				</template>
+				{{ t('collectives', 'Download collective as zip') }}
+			</NcButton>
 		</div>
 	</NcModal>
 </template>
 
 <script>
 import { t } from '@nextcloud/l10n'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
+import DownloadIcon from 'vue-material-design-icons/TrayArrowDown.vue'
+import { exportCollectiveUrl } from '../../apis/collectives/collectives.js'
 
 export default {
 	name: 'CollectivePublishModal',
 
 	components: {
+		DownloadIcon,
+		NcButton,
 		NcModal,
 	},
 
@@ -38,11 +49,21 @@ export default {
 		'close',
 	],
 
+	computed: {
+		exportUrl() {
+			return exportCollectiveUrl(this.collective.id)
+		},
+	},
+
 	methods: {
 		t,
 
 		onClose() {
 			this.$emit('close')
+		},
+
+		onDownload() {
+			this.onClose()
 		},
 	},
 }
